@@ -2,102 +2,16 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import {
-  Environment,
   ScrollControls,
   Scroll,
   useScroll,
   Stars,
-  Lightformer,
-  MeshDistortMaterial,
-  Icosahedron,
 } from "@react-three/drei";
 import { useRef } from "react";
 import type React from "react";
-import type { Group, Mesh } from "three";
+import type { Mesh } from "three";
 import * as THREE from "three";
-
-type DistortMaterialRef = React.ComponentRef<typeof MeshDistortMaterial>;
-
-function Nebula() {
-  const mesh = useRef<Mesh>(null);
-  const mat = useRef<DistortMaterialRef>(null);
-  const scroll = useScroll();
-
-  useFrame((state, delta) => {
-    if (!mesh.current || !mat.current) return;
-    const t = scroll.offset; // 0 → 1
-
-    // Constant slow tumble + scroll-driven spin
-    mesh.current.rotation.x += delta * (0.15 + t * 0.8);
-    mesh.current.rotation.y += delta * (0.2 + t * 1.0);
-
-    // Morphing: distort surges then calms across scroll
-    const targetDistort = 0.25 + Math.sin(t * Math.PI) * 0.6;
-    mat.current.distort = THREE.MathUtils.lerp(
-      mat.current.distort,
-      targetDistort,
-      0.08
-    );
-
-    // Iridescence index of refraction shifts ↔ rainbow chrome
-    mat.current.iridescenceIOR = 1.3 + t * 1.3;
-
-    // Breathing scale + scroll-driven growth
-    const scale =
-      1 + Math.sin(state.clock.elapsedTime * 0.6) * 0.04 + t * 0.35;
-    mesh.current.scale.setScalar(scale);
-  });
-
-  return (
-    <Icosahedron args={[1.3, 64]} ref={mesh}>
-      <MeshDistortMaterial
-        ref={mat}
-        color="#ffffff"
-        roughness={0}
-        metalness={1}
-        envMapIntensity={1.6}
-        clearcoat={1}
-        clearcoatRoughness={0.05}
-        iridescence={1}
-        iridescenceIOR={1.6}
-        iridescenceThicknessRange={[100, 900]}
-        distort={0.35}
-        speed={2}
-      />
-    </Icosahedron>
-  );
-}
-
-function HoloLights() {
-  const group = useRef<Group>(null);
-  const scroll = useScroll();
-
-  useFrame((_, delta) => {
-    if (!group.current) return;
-    const t = scroll.offset;
-    group.current.rotation.y += delta * (0.3 + t * 1.2);
-    group.current.rotation.x = Math.sin(t * Math.PI * 2) * 0.4;
-  });
-
-  return (
-    <group ref={group}>
-      {/* Huge color walls — wrap the chrome from every direction so the
-          reflection is never black. These are the dominant rainbow tint. */}
-      <Lightformer form="rect" intensity={2.2} color="#a855f7" position={[0, 0, -12]} scale={[24, 24, 1]} />
-      <Lightformer form="rect" intensity={2.2} color="#ec4899" position={[0, 0, 12]} scale={[24, 24, 1]} rotation={[0, Math.PI, 0]} />
-      <Lightformer form="rect" intensity={1.8} color="#06b6d4" position={[-12, 0, 0]} scale={[24, 24, 1]} rotation={[0, Math.PI / 2, 0]} />
-      <Lightformer form="rect" intensity={1.8} color="#f59e0b" position={[12, 0, 0]} scale={[24, 24, 1]} rotation={[0, -Math.PI / 2, 0]} />
-      <Lightformer form="rect" intensity={2.0} color="#fbbf24" position={[0, 12, 0]} scale={[24, 24, 1]} rotation={[Math.PI / 2, 0, 0]} />
-      <Lightformer form="rect" intensity={1.4} color="#7c3aed" position={[0, -12, 0]} scale={[24, 24, 1]} rotation={[-Math.PI / 2, 0, 0]} />
-
-      {/* Sharp accents — create bright specular highlights */}
-      <Lightformer form="circle" intensity={6} color="#ff3df0" position={[5, 4, 4]} scale={1.6} />
-      <Lightformer form="circle" intensity={6} color="#22d3ee" position={[-5, 2, -3]} scale={1.6} />
-      <Lightformer form="ring" intensity={4} color="#fde047" position={[0, -5, 3]} scale={2.2} />
-      <Lightformer form="circle" intensity={5} color="#34d399" position={[-4, -3, 5]} scale={1.4} />
-    </group>
-  );
-}
+import Fur from "./Fur";
 
 function NebulaClouds() {
   const a = useRef<Mesh>(null);
@@ -154,11 +68,13 @@ function CameraRig() {
   useFrame((state, delta) => {
     const t = scroll.offset;
 
-    const angle = t * Math.PI * 1.6;
-    const radius = 5 - t * 1.2;
+    // Slight orbit so the fur sway is visible from changing angles,
+    // but keep the shape mostly upright in view.
+    const angle = t * Math.PI * 0.9;
+    const radius = 5.2 - t * 0.6;
     const desired = new THREE.Vector3(
       Math.sin(angle) * radius,
-      1.0 + Math.sin(t * Math.PI) * 1.4,
+      0.5 + Math.sin(t * Math.PI) * 0.8,
       Math.cos(angle) * radius
     );
 
@@ -197,22 +113,22 @@ function HtmlContent() {
           Lecture01 ✦
         </span>
         <nav className="pointer-events-auto hidden gap-8 text-sm text-white sm:flex">
-          <a href="#nebula" className="hover:opacity-70">Nebula</a>
-          <a href="#transmute" className="hover:opacity-70">Transmute</a>
-          <a href="#infinite" className="hover:opacity-70">Infinite</a>
+          <a href="#fur" className="hover:opacity-70">Fur</a>
+          <a href="#wind" className="hover:opacity-70">Wind</a>
+          <a href="#drift" className="hover:opacity-70">Drift</a>
         </nav>
       </header>
 
-      <Section id="nebula" className="justify-end text-white">
+      <Section id="fur" className="justify-end text-white">
         <p className="mb-3 text-[10px] tracking-[0.3em] uppercase text-white/50">
-          01 — Born from stardust
+          01 — Soft matter
         </p>
         <h1 className="max-w-2xl text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
-          A <span className="italic text-fuchsia-300">nebula</span> in
-          <br /> chrome.
+          A <span className="italic text-blue-300">furry</span> nebula,
+          <br /> spun in space.
         </h1>
         <p className="mt-4 max-w-md text-sm text-white/70 sm:text-base">
-          Scroll through the void — light bends, form folds.
+          Scroll down — the cosmic wind picks up.
         </p>
         <div className="mt-8 flex items-center gap-2 text-[10px] tracking-widest uppercase text-white/40">
           <span className="inline-block h-px w-8 bg-white/40" />
@@ -220,39 +136,39 @@ function HtmlContent() {
         </div>
       </Section>
 
-      <Section id="transmute" className="items-end justify-center text-white">
+      <Section id="wind" className="items-end justify-center text-white">
         <p className="mb-3 text-[10px] tracking-[0.3em] uppercase text-white/50">
-          02 — Transmutation
+          02 — Solar wind
         </p>
         <h2 className="max-w-xl text-right text-3xl font-semibold leading-tight tracking-tight sm:text-5xl">
-          Chrome shifts,
+          Every strand
           <br />
-          <span className="italic text-cyan-300">form transmutes.</span>
+          <span className="italic text-blue-200">bends with you.</span>
         </h2>
         <p className="mt-4 max-w-sm text-right text-sm text-white/70">
-          Iridescent metal that obeys your scroll — no two frames alike.
+          32 shells of geometry, wind-deflected per-vertex on the GPU.
         </p>
       </Section>
 
       <Section
-        id="infinite"
+        id="drift"
         className="items-center justify-center text-center text-white"
       >
         <p className="mb-3 text-[10px] tracking-[0.3em] uppercase text-white/50">
-          03 — Infinite
+          03 — Drift
         </p>
         <h2 className="max-w-2xl text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
-          Made of
-          <span className="italic text-fuchsia-300"> light,</span>
+          Soft on the
+          <span className="italic text-blue-300"> outside,</span>
           <br />
           shaped by
-          <span className="italic text-cyan-300"> motion.</span>
+          <span className="italic text-blue-200"> motion.</span>
         </h2>
         <a
-          href="#nebula"
+          href="#fur"
           className="pointer-events-auto mt-10 inline-block rounded-full border border-white/30 px-6 py-3 text-sm tracking-widest uppercase hover:bg-white hover:text-black transition-colors"
         >
-          Return to the void
+          Drift back up
         </a>
       </Section>
     </>
@@ -263,7 +179,7 @@ export default function Scene() {
   return (
     <Canvas
       dpr={[1, 2]}
-      camera={{ position: [0, 1, 5], fov: 35 }}
+      camera={{ position: [0, 0.5, 5.2], fov: 38 }}
       gl={{ antialias: true }}
     >
       <color attach="background" args={["#160736"]} />
@@ -282,11 +198,7 @@ export default function Scene() {
       />
 
       <ScrollControls pages={3} damping={0.25}>
-        <Nebula />
-
-        <Environment frames={Infinity} resolution={256}>
-          <HoloLights />
-        </Environment>
+        <Fur />
 
         <CameraRig />
 
