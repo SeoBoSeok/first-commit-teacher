@@ -81,41 +81,68 @@ function HoloLights() {
 
   return (
     <group ref={group}>
-      <Lightformer
-        form="circle"
-        intensity={5}
-        color="#ff3df0"
-        position={[5, 4, 4]}
-        scale={2.5}
-      />
-      <Lightformer
-        form="circle"
-        intensity={5}
-        color="#22d3ee"
-        position={[-5, 2, -3]}
-        scale={2.5}
-      />
-      <Lightformer
-        form="circle"
-        intensity={4}
-        color="#fde047"
-        position={[0, -5, 3]}
-        scale={2}
-      />
-      <Lightformer
-        form="ring"
-        intensity={3}
-        color="#a855f7"
-        position={[0, 4, -5]}
-        scale={3.5}
-      />
-      <Lightformer
-        form="rect"
-        intensity={2.5}
-        color="#34d399"
-        position={[-4, -2, 4]}
-        scale={[3, 1, 1]}
-      />
+      {/* Huge color walls — wrap the chrome from every direction so the
+          reflection is never black. These are the dominant rainbow tint. */}
+      <Lightformer form="rect" intensity={2.2} color="#a855f7" position={[0, 0, -12]} scale={[24, 24, 1]} />
+      <Lightformer form="rect" intensity={2.2} color="#ec4899" position={[0, 0, 12]} scale={[24, 24, 1]} rotation={[0, Math.PI, 0]} />
+      <Lightformer form="rect" intensity={1.8} color="#06b6d4" position={[-12, 0, 0]} scale={[24, 24, 1]} rotation={[0, Math.PI / 2, 0]} />
+      <Lightformer form="rect" intensity={1.8} color="#f59e0b" position={[12, 0, 0]} scale={[24, 24, 1]} rotation={[0, -Math.PI / 2, 0]} />
+      <Lightformer form="rect" intensity={2.0} color="#fbbf24" position={[0, 12, 0]} scale={[24, 24, 1]} rotation={[Math.PI / 2, 0, 0]} />
+      <Lightformer form="rect" intensity={1.4} color="#7c3aed" position={[0, -12, 0]} scale={[24, 24, 1]} rotation={[-Math.PI / 2, 0, 0]} />
+
+      {/* Sharp accents — create bright specular highlights */}
+      <Lightformer form="circle" intensity={6} color="#ff3df0" position={[5, 4, 4]} scale={1.6} />
+      <Lightformer form="circle" intensity={6} color="#22d3ee" position={[-5, 2, -3]} scale={1.6} />
+      <Lightformer form="ring" intensity={4} color="#fde047" position={[0, -5, 3]} scale={2.2} />
+      <Lightformer form="circle" intensity={5} color="#34d399" position={[-4, -3, 5]} scale={1.4} />
+    </group>
+  );
+}
+
+function NebulaClouds() {
+  const a = useRef<Mesh>(null);
+  const b = useRef<Mesh>(null);
+  const c = useRef<Mesh>(null);
+
+  useFrame((_, delta) => {
+    if (a.current) a.current.rotation.y += delta * 0.02;
+    if (b.current) b.current.rotation.y -= delta * 0.015;
+    if (c.current) c.current.rotation.x += delta * 0.01;
+  });
+
+  const cloudMat = (color: string, opacity = 0.4) => (
+    <meshBasicMaterial
+      color={color}
+      transparent
+      opacity={opacity}
+      blending={THREE.AdditiveBlending}
+      depthWrite={false}
+      toneMapped={false}
+    />
+  );
+
+  return (
+    <group>
+      <mesh ref={a} position={[-7, 2, -12]}>
+        <sphereGeometry args={[6, 32, 32]} />
+        {cloudMat("#7c2d92", 0.45)}
+      </mesh>
+      <mesh ref={b} position={[8, -3, -10]}>
+        <sphereGeometry args={[5.5, 32, 32]} />
+        {cloudMat("#0e7490", 0.5)}
+      </mesh>
+      <mesh ref={c} position={[2, 6, -14]}>
+        <sphereGeometry args={[4.5, 32, 32]} />
+        {cloudMat("#be185d", 0.4)}
+      </mesh>
+      <mesh position={[-4, -6, -9]}>
+        <sphereGeometry args={[4, 32, 32]} />
+        {cloudMat("#1e3a8a", 0.45)}
+      </mesh>
+      <mesh position={[0, 0, -18]}>
+        <sphereGeometry args={[9, 32, 32]} />
+        {cloudMat("#312e81", 0.35)}
+      </mesh>
     </group>
   );
 }
@@ -239,14 +266,17 @@ export default function Scene() {
       camera={{ position: [0, 1, 5], fov: 35 }}
       gl={{ antialias: true }}
     >
-      <color attach="background" args={["#020014"]} />
+      <color attach="background" args={["#160736"]} />
+      <fog attach="fog" args={["#1a0a3a", 18, 40]} />
+
+      <NebulaClouds />
 
       <Stars
         radius={80}
         depth={40}
         count={5000}
-        factor={3}
-        saturation={0.2}
+        factor={3.5}
+        saturation={0.6}
         fade
         speed={0.5}
       />
