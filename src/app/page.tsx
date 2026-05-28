@@ -1,9 +1,5 @@
-import Scene from "@/components/Scene";
+import SpacekkabbiApp from "@/components/SpacekkabbiApp";
 
 export default function Home() {
-  return (
-    <main className="h-screen w-screen overflow-hidden bg-black text-white">
-      <Scene />
-    </main>
-  );
+  return <SpacekkabbiApp />;
 }
