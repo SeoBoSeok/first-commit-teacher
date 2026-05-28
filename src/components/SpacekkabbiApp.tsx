@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Loader from "./Loader";
+import MusicPlayer from "./MusicPlayer";
 import {
   CHARACTERS,
   FACTIONS,
@@ -820,6 +821,7 @@ export default function SpacekkabbiApp() {
       <div className="scanlines" />
 
       <Nav />
+      <MusicPlayer />
       <Hero featured={featured} />
 
       <MarqueeBar
