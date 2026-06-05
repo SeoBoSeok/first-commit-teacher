@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import SignInModal from "./SignInModal";
 
@@ -34,6 +35,8 @@ export default function NavAuthButton() {
 
   const display =
     session.user.nickname ?? session.user.name ?? "kkabbi";
+  const image = session.user.image ?? null;
+  const initial = display[0]?.toUpperCase() ?? "★";
 
   return (
     <div className="nav-auth-wrap">
@@ -42,20 +45,44 @@ export default function NavAuthButton() {
         className="nav-auth nav-auth--me"
         onClick={() => setMenuOpen((v) => !v)}
       >
-        <span className="nav-auth__dot" />
         {display}
+        <span className="nav-auth__avatar" aria-hidden>
+          {image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={image} alt="" />
+          ) : (
+            <span>{initial}</span>
+          )}
+        </span>
       </button>
       {menuOpen && (
         <div className="nav-auth-menu" onMouseLeave={() => setMenuOpen(false)}>
           <div className="nav-auth-menu__head">
-            <div className="nav-auth-menu__nick">{display}</div>
-            {session.user.email && (
-              <div className="nav-auth-menu__email">{session.user.email}</div>
-            )}
+            <span className="nav-auth-menu__avatar">
+              {image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={image} alt="" />
+              ) : (
+                <span>{initial}</span>
+              )}
+            </span>
+            <div className="nav-auth-menu__head-text">
+              <div className="nav-auth-menu__nick">{display}</div>
+              {session.user.email && (
+                <div className="nav-auth-menu__email">{session.user.email}</div>
+              )}
+            </div>
           </div>
+          <Link
+            href="/me"
+            className="nav-auth-menu__item"
+            onClick={() => setMenuOpen(false)}
+          >
+            My profile
+          </Link>
           <button
             type="button"
-            className="nav-auth-menu__item"
+            className="nav-auth-menu__item nav-auth-menu__item--danger"
             onClick={() => { setMenuOpen(false); signOut({ redirectTo: "/" }); }}
           >
             Sign out

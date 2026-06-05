@@ -152,6 +152,36 @@ export async function updateUser(
   return users[i];
 }
 
+/**
+ * Hard-delete a user record and any verification tokens they own.
+ * Orders are kept (with userId nulled out) so receipts and shipping records
+ * survive — same pattern most real stores follow for tax/audit reasons.
+ */
+export async function deleteUserById(id: string): Promise<boolean> {
+  const users = await readUsers();
+  const next = users.filter((u) => u.id !== id);
+  if (next.length === users.length) return false;
+  await writeUsers(next);
+
+  // Anonymize orders (keep them, but unlink from the deleted user)
+  const orders = await readOrders();
+  const updatedOrders = orders.map((o) =>
+    o.userId === id
+      ? { ...o, userId: null, nickname: null, updatedAt: new Date().toISOString() }
+      : o
+  );
+  if (updatedOrders.some((o, i) => o !== orders[i])) {
+    await writeOrders(updatedOrders);
+  }
+
+  // Drop any of their outstanding tokens
+  const tokens = await readTokens();
+  const tokensLeft = tokens.filter((t) => t.userId !== id);
+  if (tokensLeft.length !== tokens.length) await writeTokens(tokensLeft);
+
+  return true;
+}
+
 /* ============ Orders ============ */
 
 async function readOrders(): Promise<StoredOrder[]> {

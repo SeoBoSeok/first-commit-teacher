@@ -47,9 +47,37 @@ export default function SignInModal({
 
   if (!open) return null;
 
-  const handleDiscord = () => {
+  const handleDiscord = async () => {
     setBusy(true);
-    signIn("discord", { redirectTo: "/" });
+    try {
+      // next-auth v5 beta sometimes doesn't navigate from inside a modal — call
+      // the signin endpoint ourselves, then hard-navigate to the Discord URL.
+      const csrfRes = await fetch("/api/auth/csrf");
+      const { csrfToken } = await csrfRes.json();
+      const body = new URLSearchParams({
+        csrfToken,
+        callbackUrl: "/",
+      });
+      const res = await fetch("/api/auth/signin/discord", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Auth-Return-Redirect": "1",
+        },
+        body,
+      });
+      const data = (await res.json().catch(() => null)) as { url?: string } | null;
+      if (data?.url) {
+        window.location.href = data.url;
+        return;
+      }
+      // Fallback: try the library's signIn
+      await signIn("discord", { redirectTo: "/" });
+    } catch (err) {
+      console.error("Discord signin failed:", err);
+      setBusy(false);
+      setError("Could not start Discord sign-in. Check the browser console.");
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
