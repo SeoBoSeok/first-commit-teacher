@@ -1,8 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
 import Loader from "./Loader";
 import MusicPlayer from "./MusicPlayer";
+import AuthProvider from "./AuthProvider";
+import NavAuthButton from "./NavAuthButton";
+import NicknameModal from "./NicknameModal";
 import {
   CHARACTERS,
   FACTIONS,
@@ -56,7 +60,15 @@ function useScrollY() {
 }
 
 /* ============ Nav ============ */
-function Nav() {
+function Nav({
+  cartCount,
+  cartTotal,
+  onCartOpen,
+}: {
+  cartCount: number;
+  cartTotal: number;
+  onCartOpen: () => void;
+}) {
   return (
     <nav className="nav">
       <a className="nav__logo" href="#top">
@@ -71,7 +83,22 @@ function Nav() {
         <a href="#fanart">Fanart</a>
         <a href="#faq">FAQ</a>
       </div>
-      <a className="nav__cta" href="#join">Join the Belt →</a>
+      <div className="nav__right">
+        <a className="nav__cta" href="#join">Join the Belt →</a>
+        <button
+          type="button"
+          className={`nav-cart ${cartCount > 0 ? "has-items" : ""}`}
+          onClick={onCartOpen}
+          aria-label={`Open cart with ${cartCount} items`}
+        >
+          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+            <path d="M3 3h2l.6 2H17a1 1 0 0 1 .98 1.22l-1.4 6A1 1 0 0 1 15.6 13H7.2L7 14h10v2H6a1 1 0 0 1-.98-1.22L6.4 9 5.05 4H3V3zm5 14a1.5 1.5 0 1 1-.001 3.001A1.5 1.5 0 0 1 8 17zm8 0a1.5 1.5 0 1 1-.001 3.001A1.5 1.5 0 0 1 16 17z" />
+          </svg>
+          <span className="nav-cart__count">{cartCount}</span>
+          {cartCount > 0 && <span className="nav-cart__total">${cartTotal}</span>}
+        </button>
+        <NavAuthButton />
+      </div>
     </nav>
   );
 }
@@ -515,19 +542,6 @@ function Shop({ onAdd }: { onAdd: (p: Product) => void }) {
 /* ============ Cart ============ */
 type CartItem = { id: string; qty: number };
 
-function CartFAB({ count, total, onOpen }: { count: number; total: number; onOpen: () => void }) {
-  return (
-    <button
-      className={`cart-fab ${count > 0 ? "has-items" : ""}`}
-      onClick={onOpen}
-    >
-      <span className="cart-fab__count">{count}</span>
-      <span>CART</span>
-      <span className="cart-fab__total">${total}</span>
-    </button>
-  );
-}
-
 function CartDrawer({
   open,
   items,
@@ -543,6 +557,11 @@ function CartDrawer({
   onDec: (id: string) => void;
   onRemove: (id: string) => void;
 }) {
+  const { data: session } = useSession();
+  const [guestEmail, setGuestEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   if (!open) return null;
   const rows = items
     .map((it) => {
@@ -551,6 +570,31 @@ function CartDrawer({
     })
     .filter((x): x is { id: string; qty: number; p: Product } => x !== null);
   const subtotal = rows.reduce((s, r) => s + r.p.price * r.qty, 0);
+
+  const checkout = async () => {
+    setError(null);
+    setBusy(true);
+    const r = await fetch("/api/checkout", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        items: items.map((it) => ({ productId: it.id, qty: it.qty })),
+        email: session?.user?.email ? undefined : guestEmail || undefined,
+      }),
+    }).catch(() => null);
+    if (!r) {
+      setError("Network error. Try again.");
+      setBusy(false);
+      return;
+    }
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !data.url) {
+      setError(data.error ?? "Checkout failed");
+      setBusy(false);
+      return;
+    }
+    window.location.href = data.url;
+  };
 
   return (
     <div className="cart-backdrop" onClick={onClose}>
@@ -603,8 +647,28 @@ function CartDrawer({
             <span>Total</span>
             <span>${subtotal + (subtotal >= 80 || subtotal === 0 ? 0 : 8)}</span>
           </div>
-          <button className="btn btn--primary cart__checkout" disabled={rows.length === 0}>
-            Tune in to checkout
+
+          {!session?.user && rows.length > 0 && (
+            <label className="cart__guest">
+              <span>Guest email (or sign in)</span>
+              <input
+                type="email"
+                value={guestEmail}
+                onChange={(e) => setGuestEmail(e.target.value)}
+                placeholder="you@orbit.belt"
+                disabled={busy}
+              />
+            </label>
+          )}
+
+          {error && <div className="cart__error">[!] {error}</div>}
+
+          <button
+            className="btn btn--primary cart__checkout"
+            disabled={rows.length === 0 || busy || (!session?.user && !guestEmail)}
+            onClick={checkout}
+          >
+            {busy ? "Tuning in…" : "Tune in to checkout"}
           </button>
         </footer>
       </aside>
@@ -813,15 +877,20 @@ export default function SpacekkabbiApp() {
     setCart((p) => p.filter((x) => x.id !== id));
 
   return (
-    <>
+    <AuthProvider>
       <Loader />
 
       <div className="cosmos-bg" />
       <div className="grain" />
       <div className="scanlines" />
 
-      <Nav />
+      <Nav
+        cartCount={count}
+        cartTotal={total}
+        onCartOpen={() => setCartOpen(true)}
+      />
       <MusicPlayer />
+      <NicknameModal />
       <Hero featured={featured} />
 
       <MarqueeBar
@@ -844,7 +913,6 @@ export default function SpacekkabbiApp() {
       <Join />
       <Footer />
 
-      <CartFAB count={count} total={total} onOpen={() => setCartOpen(true)} />
       <CartDrawer
         open={cartOpen}
         items={cart}
@@ -861,6 +929,6 @@ export default function SpacekkabbiApp() {
           onPick={setActiveChar}
         />
       )}
-    </>
+    </AuthProvider>
   );
 }

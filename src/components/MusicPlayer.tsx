@@ -34,6 +34,29 @@ export default function MusicPlayer() {
       .catch(() => { setPlaying(false); setBlocked(true); });
   }, [index, hydrated]);
 
+  // Browsers block autoplay-with-sound until any user gesture. If we got blocked,
+  // arm one-shot listeners so the very first interaction anywhere kicks playback on.
+  useEffect(() => {
+    if (!blocked) return;
+    const tryUnblock = () => {
+      const a = audioRef.current;
+      if (!a) return;
+      a.play()
+        .then(() => { setPlaying(true); setBlocked(false); })
+        .catch(() => { /* still blocked, listeners stay armed */ });
+    };
+    // Only events that grant browser "user activation" — scroll/wheel/mousemove don't qualify.
+    const events: (keyof DocumentEventMap)[] = [
+      "pointerdown", "mousedown", "click", "touchstart", "touchend", "keydown",
+    ];
+    events.forEach((e) =>
+      document.addEventListener(e, tryUnblock, { passive: true })
+    );
+    return () => {
+      events.forEach((e) => document.removeEventListener(e, tryUnblock));
+    };
+  }, [blocked]);
+
   const togglePlay = () => {
     const a = audioRef.current;
     if (!a) return;
@@ -93,7 +116,7 @@ export default function MusicPlayer() {
           </button>
           <button
             type="button"
-            className="player__btn player__btn--primary"
+            className={`player__btn player__btn--primary ${blocked ? "is-blocked" : ""}`}
             onClick={togglePlay}
             aria-label={playing ? "Pause" : "Play"}
           >
