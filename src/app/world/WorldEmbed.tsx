@@ -20,7 +20,21 @@ export default function WorldEmbed({ nickname }: { nickname: string | null }) {
   }, [nickname]);
 
   return (
-    <div className="flex h-dvh flex-col bg-black text-white">
+    <div className="relative flex h-dvh flex-col bg-black text-white">
+      {/* 입장 포탈 연출 — 페이지 이동을 "공간 이동"처럼 */}
+      <div className="portal-enter pointer-events-none absolute inset-0 z-50" aria-hidden />
+      <style>{`
+        .portal-enter {
+          background:
+            radial-gradient(circle at 50% 55%, transparent 0%, transparent 12%, #5ab0ff33 18%, #ff2bd644 30%, #08001E 55%);
+          animation: portalIn 0.9s ease-out forwards;
+        }
+        @keyframes portalIn {
+          0%   { opacity: 1; transform: scale(1); }
+          55%  { opacity: 1; transform: scale(2.4) rotate(8deg); }
+          100% { opacity: 0; transform: scale(4) rotate(14deg); visibility: hidden; }
+        }
+      `}</style>
       <header className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
         <Link href="/" className="font-bold tracking-widest text-[#52F0FF] hover:opacity-80">
           ← SPACEKKABBI
