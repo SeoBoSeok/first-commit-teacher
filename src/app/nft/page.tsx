@@ -27,14 +27,22 @@ export default function NftPage() {
             방송 벨트의 도깨비들이 온체인에 산다. 아래 코덱스의 캐릭터들이 곧 컬렉션의 주인공 —
             게임(까비 월드)의 커스텀 까비도 같은 트레이트 언어를 쓴다.
           </p>
-          <a
-            href={OPENSEA}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-5 inline-block rounded-xl bg-gradient-to-r from-[#FF2BD6] to-[#7BFF52] px-6 py-3 font-bold text-[#0a0612] transition hover:opacity-90"
-          >
-            OpenSea에서 컬렉션 보기 ↗
-          </a>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link
+              href="/gallery"
+              className="inline-block rounded-xl bg-gradient-to-r from-[#52F0FF] to-[#C9B8FF] px-6 py-3 font-bold text-[#0a0612] transition hover:opacity-90"
+            >
+              🖼 3D 메타버스 전시관 입장
+            </Link>
+            <a
+              href={OPENSEA}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block rounded-xl bg-gradient-to-r from-[#FF2BD6] to-[#7BFF52] px-6 py-3 font-bold text-[#0a0612] transition hover:opacity-90"
+            >
+              OpenSea에서 컬렉션 보기 ↗
+            </a>
+          </div>
         </header>
 
         {factions.map((key) => {

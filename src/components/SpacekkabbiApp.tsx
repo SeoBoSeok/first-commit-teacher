@@ -84,6 +84,7 @@ function Nav({
         <a href="#fanart">Fanart</a>
         <a href="#faq">FAQ</a>
         <a href="/nft">NFT</a>
+        <a href="/gallery">Gallery</a>
         {/* 까비 월드(학생A 게임) 임베드 페이지 — M4 연결 */}
         <a className="nav__play" href="/world">🎮 PLAY</a>
       </div>
