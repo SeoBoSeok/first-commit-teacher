@@ -2880,3 +2880,22 @@ button { font-family: inherit; cursor: pointer; }
   margin-top: 6px;
 }
 .danger-modal__actions .auth-btn { width: 100%; }
+
+/* ── 까비 월드 입구 (M4) ─────────────────────────────── */
+.nav__play {
+  color: #ff2bd6 !important;
+  border: 1px solid rgba(255, 43, 214, 0.45);
+  border-radius: 999px;
+  padding: 4px 12px;
+  text-shadow: 0 0 10px rgba(255, 43, 214, 0.6);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.nav__play:hover {
+  background: rgba(255, 43, 214, 0.12);
+  box-shadow: 0 0 14px rgba(255, 43, 214, 0.35);
+}
+.btn--play {
+  background: linear-gradient(135deg, #ff2bd6, #7bff52);
+  color: #0a0612;
+  font-weight: 800;
+}

@@ -82,6 +82,8 @@ function Nav({
         <a href="#shop">Shop</a>
         <a href="#fanart">Fanart</a>
         <a href="#faq">FAQ</a>
+        {/* 까비 월드(학생A 게임) 임베드 페이지 — M4 연결 */}
+        <a className="nav__play" href="/world">🎮 PLAY</a>
       </div>
       <div className="nav__right">
         <a className="nav__cta" href="#join">Join the Belt →</a>
@@ -126,6 +128,7 @@ function Hero({ featured }: { featured: Char }) {
           Ten dokkaebi, three factions, one long broadcast nobody quite remembers turning on.
         </p>
         <div className="hero__cta-row">
+          <a className="btn btn--primary btn--play" href="/world">🌍 Enter Kkabbi World</a>
           <a className="btn btn--primary" href="#codex">Open the Codex <span>↗</span></a>
           <a className="btn btn--ghost" href="#world">Read the Lore</a>
         </div>
