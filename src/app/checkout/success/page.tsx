@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -35,7 +35,16 @@ function money(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+// useSearchParams()는 Suspense 경계가 필요하다 — 없으면 프로덕션 빌드(프리렌더)가 실패한다
 export default function CheckoutSuccessPage() {
+  return (
+    <Suspense fallback={null}>
+      <CheckoutSuccessInner />
+    </Suspense>
+  );
+}
+
+function CheckoutSuccessInner() {
   const sp = useSearchParams();
   const orderId = sp.get("order");
   const [order, setOrder] = useState<Order | null>(null);
