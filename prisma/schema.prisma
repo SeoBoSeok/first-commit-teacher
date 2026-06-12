@@ -1,0 +1,60 @@
+// SpaceKkabbi 데이터 스키마 — store.ts의 타입(StoredUser/StoredOrder/StoredToken)과 1:1 대응
+// M1: 파일 JSON → Postgres(Neon). 날짜는 DB에선 DateTime, 앱 경계에선 ISO 문자열로 변환한다.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String?   @unique // 파일 시절엔 코드가 지키던 규칙을 DB가 강제
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  nickname      String?   @unique
+  passwordHash  String?
+  discordId     String?   @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tokens Token[]
+}
+
+model Order {
+  id                    String   @id // "ord_…" — 기존 ID 형식 유지 (영수증 호환)
+  userId                String?  // 게스트 결제·탈퇴 회원 익명화를 위해 FK 없이 느슨하게 둔다
+  email                 String
+  nickname              String?
+  items                 Json     // StoredOrderItem[] — 주문 시점의 스냅샷이므로 정규화하지 않는다
+  subtotal              Int      // cents
+  shipping              Int
+  total                 Int
+  currency              String
+  status                String   // pending | paid | shipped | cancelled | failed
+  stripeSessionId       String?  @unique
+  stripePaymentIntentId String?
+  shippingAddress       Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([userId])
+  @@index([email])
+}
+
+model Token {
+  token      String   @id
+  userId     String
+  identifier String // email
+  purpose    String // email_verification | password_reset
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade) // 탈퇴 시 토큰 자동 정리
+
+  @@unique([userId, purpose]) // 같은 용도 토큰은 1개만 — createToken의 교체 정책을 DB가 보장
+}

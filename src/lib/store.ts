@@ -1,17 +1,14 @@
 /**
- * File-backed JSON store. Temporary swap-in for Prisma while npm install
- * is blocked by network. Same surface area can be re-implemented on top
- * of Prisma later without touching callers.
+ * Prisma(Postgres) 기반 스토어 — M1 전환 완료.
+ *
+ * 원래 파일 JSON 스토어가 "함수 표면 유지, 호출부 무변경" 전제로 설계돼 있어서
+ * (원작자의 주석 그대로) 이 파일의 내부만 교체했다. 호출하는 쪽은 한 줄도 안 바뀐다.
+ * 날짜는 DB에선 DateTime, 이 경계 바깥에선 기존과 같은 ISO 문자열이다.
  */
 
-import { promises as fs } from "fs";
-import path from "path";
 import crypto from "crypto";
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const USERS_FILE = path.join(DATA_DIR, "users.json");
-const ORDERS_FILE = path.join(DATA_DIR, "orders.json");
-const TOKENS_FILE = path.join(DATA_DIR, "tokens.json");
+import { Prisma } from "@prisma/client";
+import { prisma } from "./prisma";
 
 export type StoredUser = {
   id: string;
@@ -60,96 +57,117 @@ export type StoredOrder = {
   updatedAt: string;
 };
 
-async function ensureDir() {
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-  } catch {
-    /* ignore */
-  }
+/* ============ DB ↔ 앱 경계 변환 ============ */
+
+type DbUser = Prisma.UserGetPayload<object>;
+type DbOrder = Prisma.OrderGetPayload<object>;
+type DbToken = Prisma.TokenGetPayload<object>;
+
+const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
+
+function toStoredUser(u: DbUser): StoredUser {
+  return {
+    id: u.id,
+    email: u.email,
+    emailVerified: iso(u.emailVerified),
+    name: u.name,
+    image: u.image,
+    nickname: u.nickname,
+    passwordHash: u.passwordHash,
+    discordId: u.discordId,
+    createdAt: u.createdAt.toISOString(),
+    updatedAt: u.updatedAt.toISOString(),
+  };
 }
 
-async function readJson<T>(file: string, fallback: T): Promise<T> {
-  await ensureDir();
-  try {
-    const buf = await fs.readFile(file, "utf8");
-    return JSON.parse(buf) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-async function writeJson<T>(file: string, data: T): Promise<void> {
-  await ensureDir();
-  const tmp = file + ".tmp";
-  await fs.writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
-  await fs.rename(tmp, file);
+function toStoredOrder(o: DbOrder): StoredOrder {
+  return {
+    id: o.id,
+    userId: o.userId,
+    email: o.email,
+    nickname: o.nickname,
+    items: (o.items as StoredOrderItem[]) ?? [],
+    subtotal: o.subtotal,
+    shipping: o.shipping,
+    total: o.total,
+    currency: o.currency,
+    status: o.status as StoredOrder["status"],
+    stripeSessionId: o.stripeSessionId,
+    stripePaymentIntentId: o.stripePaymentIntentId,
+    shippingAddress: (o.shippingAddress as StoredOrder["shippingAddress"]) ?? null,
+    createdAt: o.createdAt.toISOString(),
+    updatedAt: o.updatedAt.toISOString(),
+  };
 }
 
 /* ============ Users ============ */
 
-async function readUsers(): Promise<StoredUser[]> {
-  return readJson<StoredUser[]>(USERS_FILE, []);
-}
-async function writeUsers(users: StoredUser[]): Promise<void> {
-  return writeJson(USERS_FILE, users);
-}
-
 export async function findUserByEmail(email: string): Promise<StoredUser | null> {
-  const users = await readUsers();
-  return users.find((u) => u.email?.toLowerCase() === email.toLowerCase()) ?? null;
+  const u = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: "insensitive" } },
+  });
+  return u ? toStoredUser(u) : null;
 }
 
 export async function findUserByNickname(nickname: string): Promise<StoredUser | null> {
-  const users = await readUsers();
-  return users.find((u) => u.nickname?.toLowerCase() === nickname.toLowerCase()) ?? null;
+  const u = await prisma.user.findFirst({
+    where: { nickname: { equals: nickname, mode: "insensitive" } },
+  });
+  return u ? toStoredUser(u) : null;
 }
 
 export async function findUserById(id: string): Promise<StoredUser | null> {
-  const users = await readUsers();
-  return users.find((u) => u.id === id) ?? null;
+  const u = await prisma.user.findUnique({ where: { id } });
+  return u ? toStoredUser(u) : null;
 }
 
 export async function findUserByDiscordId(discordId: string): Promise<StoredUser | null> {
-  const users = await readUsers();
-  return users.find((u) => u.discordId === discordId) ?? null;
+  const u = await prisma.user.findUnique({ where: { discordId } });
+  return u ? toStoredUser(u) : null;
 }
 
 export async function createUser(
   data: Partial<StoredUser> & { email?: string | null }
 ): Promise<StoredUser> {
-  const now = new Date().toISOString();
-  const user: StoredUser = {
-    id: data.id ?? crypto.randomUUID(),
-    email: data.email ?? null,
-    emailVerified: data.emailVerified ?? null,
-    name: data.name ?? null,
-    image: data.image ?? null,
-    nickname: data.nickname ?? null,
-    passwordHash: data.passwordHash ?? null,
-    discordId: data.discordId ?? null,
-    createdAt: now,
-    updatedAt: now,
-  };
-  const users = await readUsers();
-  users.push(user);
-  await writeUsers(users);
-  return user;
+  const u = await prisma.user.create({
+    data: {
+      id: data.id ?? crypto.randomUUID(),
+      email: data.email ?? null,
+      emailVerified: data.emailVerified ? new Date(data.emailVerified) : null,
+      name: data.name ?? null,
+      image: data.image ?? null,
+      nickname: data.nickname ?? null,
+      passwordHash: data.passwordHash ?? null,
+      discordId: data.discordId ?? null,
+    },
+  });
+  return toStoredUser(u);
 }
 
 export async function updateUser(
   id: string,
   patch: Partial<Omit<StoredUser, "id" | "createdAt">>
 ): Promise<StoredUser | null> {
-  const users = await readUsers();
-  const i = users.findIndex((u) => u.id === id);
-  if (i < 0) return null;
-  users[i] = {
-    ...users[i],
-    ...patch,
-    updatedAt: new Date().toISOString(),
-  };
-  await writeUsers(users);
-  return users[i];
+  try {
+    const u = await prisma.user.update({
+      where: { id },
+      data: {
+        ...("email" in patch ? { email: patch.email ?? null } : {}),
+        ...("emailVerified" in patch
+          ? { emailVerified: patch.emailVerified ? new Date(patch.emailVerified) : null }
+          : {}),
+        ...("name" in patch ? { name: patch.name ?? null } : {}),
+        ...("image" in patch ? { image: patch.image ?? null } : {}),
+        ...("nickname" in patch ? { nickname: patch.nickname ?? null } : {}),
+        ...("passwordHash" in patch ? { passwordHash: patch.passwordHash ?? null } : {}),
+        ...("discordId" in patch ? { discordId: patch.discordId ?? null } : {}),
+      },
+    });
+    return toStoredUser(u);
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") return null; // 대상 없음
+    throw e;
+  }
 }
 
 /**
@@ -158,95 +176,114 @@ export async function updateUser(
  * survive — same pattern most real stores follow for tax/audit reasons.
  */
 export async function deleteUserById(id: string): Promise<boolean> {
-  const users = await readUsers();
-  const next = users.filter((u) => u.id !== id);
-  if (next.length === users.length) return false;
-  await writeUsers(next);
-
-  // Anonymize orders (keep them, but unlink from the deleted user)
-  const orders = await readOrders();
-  const updatedOrders = orders.map((o) =>
-    o.userId === id
-      ? { ...o, userId: null, nickname: null, updatedAt: new Date().toISOString() }
-      : o
-  );
-  if (updatedOrders.some((o, i) => o !== orders[i])) {
-    await writeOrders(updatedOrders);
+  try {
+    // 주문 익명화 + 회원 삭제(토큰은 onDelete: Cascade)가 함께 성공하거나 함께 실패해야 한다
+    await prisma.$transaction([
+      prisma.order.updateMany({
+        where: { userId: id },
+        data: { userId: null, nickname: null },
+      }),
+      prisma.user.delete({ where: { id } }),
+    ]);
+    return true;
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") return false;
+    throw e;
   }
-
-  // Drop any of their outstanding tokens
-  const tokens = await readTokens();
-  const tokensLeft = tokens.filter((t) => t.userId !== id);
-  if (tokensLeft.length !== tokens.length) await writeTokens(tokensLeft);
-
-  return true;
 }
 
 /* ============ Orders ============ */
 
-async function readOrders(): Promise<StoredOrder[]> {
-  return readJson<StoredOrder[]>(ORDERS_FILE, []);
-}
-async function writeOrders(orders: StoredOrder[]): Promise<void> {
-  return writeJson(ORDERS_FILE, orders);
-}
-
 export async function createOrder(
   data: Omit<StoredOrder, "id" | "createdAt" | "updatedAt">
 ): Promise<StoredOrder> {
-  const now = new Date().toISOString();
-  const order: StoredOrder = {
-    ...data,
-    id: "ord_" + crypto.randomBytes(8).toString("hex"),
-    createdAt: now,
-    updatedAt: now,
-  };
-  const orders = await readOrders();
-  orders.push(order);
-  await writeOrders(orders);
-  return order;
+  const o = await prisma.order.create({
+    data: {
+      id: "ord_" + crypto.randomBytes(8).toString("hex"),
+      userId: data.userId,
+      email: data.email,
+      nickname: data.nickname,
+      items: data.items as unknown as Prisma.InputJsonValue,
+      subtotal: data.subtotal,
+      shipping: data.shipping,
+      total: data.total,
+      currency: data.currency,
+      status: data.status,
+      stripeSessionId: data.stripeSessionId,
+      stripePaymentIntentId: data.stripePaymentIntentId,
+      shippingAddress: data.shippingAddress
+        ? (data.shippingAddress as unknown as Prisma.InputJsonValue)
+        : Prisma.JsonNull,
+    },
+  });
+  return toStoredOrder(o);
 }
 
 export async function findOrderById(id: string): Promise<StoredOrder | null> {
-  const orders = await readOrders();
-  return orders.find((o) => o.id === id) ?? null;
+  const o = await prisma.order.findUnique({ where: { id } });
+  return o ? toStoredOrder(o) : null;
 }
 
 export async function findOrderBySessionId(
   sessionId: string
 ): Promise<StoredOrder | null> {
-  const orders = await readOrders();
-  return orders.find((o) => o.stripeSessionId === sessionId) ?? null;
+  const o = await prisma.order.findUnique({ where: { stripeSessionId: sessionId } });
+  return o ? toStoredOrder(o) : null;
 }
 
 export async function listOrdersByUser(userId: string): Promise<StoredOrder[]> {
-  const orders = await readOrders();
-  return orders
-    .filter((o) => o.userId === userId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const rows = await prisma.order.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map(toStoredOrder);
 }
 
 export async function listOrdersByEmail(email: string): Promise<StoredOrder[]> {
-  const orders = await readOrders();
-  return orders
-    .filter((o) => o.email.toLowerCase() === email.toLowerCase())
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const rows = await prisma.order.findMany({
+    where: { email: { equals: email, mode: "insensitive" } },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map(toStoredOrder);
 }
 
 export async function updateOrder(
   id: string,
   patch: Partial<Omit<StoredOrder, "id" | "createdAt">>
 ): Promise<StoredOrder | null> {
-  const orders = await readOrders();
-  const i = orders.findIndex((o) => o.id === id);
-  if (i < 0) return null;
-  orders[i] = {
-    ...orders[i],
-    ...patch,
-    updatedAt: new Date().toISOString(),
-  };
-  await writeOrders(orders);
-  return orders[i];
+  try {
+    const o = await prisma.order.update({
+      where: { id },
+      data: {
+        ...("userId" in patch ? { userId: patch.userId ?? null } : {}),
+        ...("email" in patch && patch.email !== undefined ? { email: patch.email } : {}),
+        ...("nickname" in patch ? { nickname: patch.nickname ?? null } : {}),
+        ...("items" in patch && patch.items
+          ? { items: patch.items as unknown as Prisma.InputJsonValue }
+          : {}),
+        ...("subtotal" in patch && patch.subtotal !== undefined ? { subtotal: patch.subtotal } : {}),
+        ...("shipping" in patch && patch.shipping !== undefined ? { shipping: patch.shipping } : {}),
+        ...("total" in patch && patch.total !== undefined ? { total: patch.total } : {}),
+        ...("currency" in patch && patch.currency !== undefined ? { currency: patch.currency } : {}),
+        ...("status" in patch && patch.status !== undefined ? { status: patch.status } : {}),
+        ...("stripeSessionId" in patch ? { stripeSessionId: patch.stripeSessionId ?? null } : {}),
+        ...("stripePaymentIntentId" in patch
+          ? { stripePaymentIntentId: patch.stripePaymentIntentId ?? null }
+          : {}),
+        ...("shippingAddress" in patch
+          ? {
+              shippingAddress: patch.shippingAddress
+                ? (patch.shippingAddress as unknown as Prisma.InputJsonValue)
+                : Prisma.JsonNull,
+            }
+          : {}),
+      },
+    });
+    return toStoredOrder(o);
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") return null;
+    throw e;
+  }
 }
 
 /* ============ Verification tokens ============ */
@@ -260,11 +297,15 @@ export type StoredToken = {
   createdAt: string;
 };
 
-async function readTokens(): Promise<StoredToken[]> {
-  return readJson<StoredToken[]>(TOKENS_FILE, []);
-}
-async function writeTokens(tokens: StoredToken[]): Promise<void> {
-  return writeJson(TOKENS_FILE, tokens);
+function toStoredToken(t: DbToken): StoredToken {
+  return {
+    token: t.token,
+    userId: t.userId,
+    identifier: t.identifier,
+    purpose: t.purpose as StoredToken["purpose"],
+    expiresAt: t.expiresAt.toISOString(),
+    createdAt: t.createdAt.toISOString(),
+  };
 }
 
 export async function createToken(
@@ -272,38 +313,39 @@ export async function createToken(
 ): Promise<StoredToken> {
   // 32 random bytes → 43-char url-safe string
   const token = crypto.randomBytes(32).toString("base64url");
-  const t: StoredToken = {
-    ...data,
-    token,
-    createdAt: new Date().toISOString(),
-  };
-  const tokens = await readTokens();
-  // Drop any existing tokens for the same user+purpose so we don't accumulate
-  const filtered = tokens.filter(
-    (x) => !(x.userId === data.userId && x.purpose === data.purpose)
-  );
-  filtered.push(t);
-  await writeTokens(filtered);
-  return t;
+  // 같은 user+purpose 토큰은 교체 — 스키마의 @@unique와 함께 이중 보장
+  const [, t] = await prisma.$transaction([
+    prisma.token.deleteMany({ where: { userId: data.userId, purpose: data.purpose } }),
+    prisma.token.create({
+      data: {
+        token,
+        userId: data.userId,
+        identifier: data.identifier,
+        purpose: data.purpose,
+        expiresAt: new Date(data.expiresAt),
+      },
+    }),
+  ]);
+  return toStoredToken(t);
 }
 
 export async function consumeToken(
   token: string,
   purpose: StoredToken["purpose"]
 ): Promise<StoredToken | null> {
-  const tokens = await readTokens();
-  const t = tokens.find((x) => x.token === token && x.purpose === purpose);
-  if (!t) return null;
-  if (new Date(t.expiresAt).getTime() < Date.now()) return null;
-  // One-time use: drop it.
-  const next = tokens.filter((x) => x.token !== token);
-  await writeTokens(next);
-  return t;
+  const t = await prisma.token.findUnique({ where: { token } });
+  if (!t || t.purpose !== purpose) return null;
+  if (t.expiresAt.getTime() < Date.now()) return null;
+  // One-time use: drop it. (동시 사용 경쟁은 삭제가 먼저 된 쪽만 성공)
+  try {
+    await prisma.token.delete({ where: { token } });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") return null;
+    throw e;
+  }
+  return toStoredToken(t);
 }
 
 export async function purgeExpiredTokens(): Promise<void> {
-  const tokens = await readTokens();
-  const now = Date.now();
-  const kept = tokens.filter((x) => new Date(x.expiresAt).getTime() >= now);
-  if (kept.length !== tokens.length) await writeTokens(kept);
+  await prisma.token.deleteMany({ where: { expiresAt: { lt: new Date() } } });
 }
